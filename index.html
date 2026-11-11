@@ -1,1 +1,183 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leitor de Ingressos - Circuito Nacional do Livro Maçônico</title>
 
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 20px 12px;
+      font-family: Arial, sans-serif;
+      background: #f2f4f7;
+      text-align: center;
+      color: #173653;
+    }
+
+    .painel {
+      max-width: 440px;
+      margin: 0 auto;
+      padding: 22px 15px;
+      border-radius: 12px;
+      background: white;
+      box-shadow: 0 3px 15px #00000015;
+    }
+
+    h1 {
+      font-size: 21px;
+      line-height: 1.4;
+    }
+
+    h2 { font-size: 17px; }
+
+    #leitor {
+      width: 100%;
+      margin: 20px auto;
+      overflow: hidden;
+      border-radius: 8px;
+    }
+
+    button {
+      background: #173653;
+      color: white;
+      border: none;
+      padding: 14px 20px;
+      margin: 7px;
+      border-radius: 7px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    #status {
+      padding: 15px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .aviso {
+      font-size: 13px;
+      color: #666;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="painel">
+    <h1>CIRCUITO NACIONAL DO LIVRO MAÇÔNICO</h1>
+    <h2>Leitor de ingressos</h2>
+
+    <div id="leitor"></div>
+
+    <p id="status">Clique para iniciar a câmera.</p>
+
+    <button id="iniciar" onclick="iniciarCamera()">
+      Iniciar câmera
+    </button>
+
+    <button id="novo" onclick="lerOutro()" disabled>
+      Ler outro ingresso
+    </button>
+
+    <p class="aviso">
+      Aponte a câmera para o QR Code do ingresso.
+      A leitura acontece automaticamente.
+    </p>
+
+    <p class="aviso">
+      Modo de teste: nenhuma entrada será registrada
+      nesta etapa.
+    </p>
+  </main>
+
+  <script>
+    let leitor = null;
+    let codigoReconhecido = false;
+
+    const status = document.getElementById("status");
+    const botaoIniciar = document.getElementById("iniciar");
+    const botaoNovo = document.getElementById("novo");
+
+    async function iniciarCamera() {
+      botaoIniciar.disabled = true;
+      status.textContent = "Solicitando acesso à câmera...";
+
+      try {
+        if (typeof Html5Qrcode === "undefined") {
+          throw new Error("Biblioteca de leitura não carregada.");
+        }
+
+        leitor = new Html5Qrcode("leitor");
+
+        await leitor.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: (largura, altura) => {
+              const lado = Math.min(
+                240,
+                Math.floor(Math.min(largura, altura) * 0.7)
+              );
+
+              return { width: lado, height: lado };
+            }
+          },
+          codigo => {
+            if (codigoReconhecido) return;
+
+            codigoReconhecido = true;
+            leitor.pause(true);
+
+            status.textContent =
+              "QR Code reconhecido com sucesso!";
+
+            botaoNovo.disabled = false;
+
+            // A validação na planilha será integrada depois.
+          },
+          () => {
+            // Aguarda silenciosamente o próximo quadro.
+          }
+        );
+
+        status.textContent =
+          "Câmera ativa. Aponte para o QR Code.";
+
+      } catch (erro) {
+        status.textContent =
+          "Não foi possível iniciar a câmera: " +
+          erro.message;
+
+        botaoIniciar.disabled = false;
+      }
+    }
+
+    function lerOutro() {
+      if (!leitor) return;
+
+      try {
+        leitor.resume();
+        codigoReconhecido = false;
+        botaoNovo.disabled = true;
+
+        status.textContent =
+          "Câmera ativa. Aponte para o próximo QR Code.";
+
+      } catch (erro) {
+        status.textContent =
+          "Não foi possível continuar: " + erro.message;
+      }
+    }
+  </script>
+</body>
+</html>
