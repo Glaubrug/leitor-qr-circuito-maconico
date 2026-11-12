@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Leitor de Ingressos - Circuito Nacional do Livro Maçônico</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Validação de Ingressos - Circuito Nacional do Livro Maçônico</title>
 
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
@@ -12,20 +13,20 @@
 
     body {
       margin: 0;
-      padding: 20px 12px;
+      padding: 16px;
       font-family: Arial, sans-serif;
       background: #f2f4f7;
-      text-align: center;
       color: #173653;
+      text-align: center;
     }
 
     .painel {
-      max-width: 440px;
-      margin: 0 auto;
-      padding: 22px 15px;
-      border-radius: 12px;
+      max-width: 460px;
+      margin: auto;
+      padding: 20px 14px;
       background: white;
-      box-shadow: 0 3px 15px #00000015;
+      border-radius: 12px;
+      box-shadow: 0 3px 14px #00000018;
     }
 
     h1 {
@@ -35,20 +36,36 @@
 
     h2 { font-size: 17px; }
 
+    label {
+      display: block;
+      margin-top: 20px;
+      font-weight: bold;
+    }
+
+    input {
+      width: 100%;
+      margin-top: 8px;
+      padding: 14px;
+      border: 1px solid #a5b0bd;
+      border-radius: 8px;
+      font-size: 18px;
+      text-align: center;
+    }
+
     #leitor {
       width: 100%;
-      margin: 20px auto;
-      overflow: hidden;
+      margin: 18px auto;
       border-radius: 8px;
+      overflow: hidden;
     }
 
     button {
       background: #173653;
       color: white;
       border: none;
-      padding: 14px 20px;
-      margin: 7px;
-      border-radius: 7px;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 6px 3px;
       font-size: 16px;
       cursor: pointer;
     }
@@ -58,66 +75,322 @@
       cursor: default;
     }
 
-    #status {
-      padding: 15px;
-      font-size: 16px;
+    #resultado {
+      margin: 18px 0;
+      padding: 20px 12px;
+      border-radius: 10px;
+      background: #edf0f3;
+      font-size: 21px;
       font-weight: bold;
+      overflow-wrap: anywhere;
+    }
+
+    #resultado.verde {
+      background: #188343;
+      color: white;
+    }
+
+    #resultado.vermelho {
+      background: #bf2525;
+      color: white;
+    }
+
+    #resultado.amarelo {
+      background: #f5d36d;
+      color: #453500;
+    }
+
+    #detalhes {
+      font-size: 16px;
+      margin-top: 10px;
+      font-weight: normal;
     }
 
     .aviso {
       font-size: 13px;
-      color: #666;
       line-height: 1.5;
+      color: #666;
     }
   </style>
 </head>
-
 <body>
   <main class="painel">
     <h1>CIRCUITO NACIONAL DO LIVRO MAÇÔNICO</h1>
-    <h2>Leitor de ingressos</h2>
+    <h2>Controle de entrada</h2>
+
+    <label for="pin">PIN do operador</label>
+    <input
+      id="pin"
+      type="password"
+      inputmode="numeric"
+      maxlength="12"
+      autocomplete="off"
+      placeholder="Digite o PIN de 12 dígitos"
+    >
 
     <div id="leitor"></div>
 
-    <p id="status">Clique para iniciar a câmera.</p>
+    <div id="resultado">
+      Aguardando leitura
+      <div id="detalhes"></div>
+    </div>
 
     <button id="iniciar" onclick="iniciarCamera()">
       Iniciar câmera
     </button>
 
     <button id="novo" onclick="lerOutro()" disabled>
-      Ler outro ingresso
+      Ler próximo ingresso
     </button>
 
     <p class="aviso">
-      Aponte a câmera para o QR Code do ingresso.
-      A leitura acontece automaticamente.
+      Aponte a câmera para o QR Code.
+      A leitura é automática.
     </p>
 
     <p class="aviso">
-      Modo de teste: nenhuma entrada será registrada
-      nesta etapa.
+      O ingresso somente será autorizado após
+      a confirmação do servidor.
     </p>
   </main>
 
   <script>
-    let leitor = null;
-    let codigoReconhecido = false;
+    // O endereço será configurado após os testes de segurança.
+    // Nunca coloque o PIN neste campo.
+    const URL_APPS_SCRIPT = "";
 
-    const status = document.getElementById("status");
+    let leitor = null;
+    let bloqueado = false;
+    let audio = null;
+
+    const campoPin = document.getElementById("pin");
+    const painelResultado = document.getElementById("resultado");
+    const detalhes = document.getElementById("detalhes");
     const botaoIniciar = document.getElementById("iniciar");
     const botaoNovo = document.getElementById("novo");
 
+    function mostrar(tipo, mensagem, detalhe = "") {
+      painelResultado.className = tipo;
+      painelResultado.firstChild.textContent = mensagem;
+      detalhes.textContent = detalhe;
+    }
+
+    function prepararSom() {
+      try {
+        const AudioContexto =
+          window.AudioContext || window.webkitAudioContext;
+
+        if (AudioContexto && !audio) {
+          audio = new AudioContexto();
+        }
+
+        if (audio && audio.state === "suspended") {
+          audio.resume();
+        }
+      } catch (erro) {
+        // O leitor visual continua funcionando sem áudio.
+      }
+    }
+
+    function tocarSom(tipo) {
+      if (!audio) return;
+
+      const frequencias =
+        tipo === "verde" ? [880] :
+        tipo === "vermelho" ? [330, 260] : [];
+
+      frequencias.forEach((frequencia, indice) => {
+        const inicio =
+          audio.currentTime + indice * 0.22;
+
+        const oscilador = audio.createOscillator();
+        const volume = audio.createGain();
+
+        oscilador.type = "sine";
+        oscilador.frequency.value = frequencia;
+
+        volume.gain.setValueAtTime(0.001, inicio);
+        volume.gain.exponentialRampToValueAtTime(
+          0.13, inicio + 0.02
+        );
+        volume.gain.exponentialRampToValueAtTime(
+          0.001, inicio + 0.17
+        );
+
+        oscilador.connect(volume);
+        volume.connect(audio.destination);
+
+        oscilador.start(inicio);
+        oscilador.stop(inicio + 0.18);
+      });
+    }
+
+    function concluir(resultado) {
+      if (resultado.ok === true) {
+        mostrar(
+          "verde",
+          "ENTRADA AUTORIZADA",
+          resultado.numero
+            ? "Ingresso nº " + resultado.numero
+            : "Ingresso validado"
+        );
+
+        tocarSom("verde");
+      } else if (
+        resultado.mensagem &&
+        (
+          resultado.mensagem.includes("MODO DE TESTE") ||
+          resultado.mensagem.includes("ERRO NA VALIDAÇÃO")
+        )
+      ) {
+        mostrar(
+          "amarelo",
+          "VALIDAÇÃO NÃO CONCLUÍDA",
+          resultado.mensagem
+        );
+      } else {
+        mostrar(
+          "vermelho",
+          "ENTRADA NEGADA",
+          resultado.mensagem || "Ingresso não autorizado"
+        );
+
+        tocarSom("vermelho");
+      }
+
+      botaoNovo.disabled = false;
+    }
+
+    function consultarResultado(id) {
+      return new Promise((resolve, reject) => {
+        let tentativas = 0;
+
+        function consultar() {
+          tentativas++;
+
+          if (tentativas > 10) {
+            reject(new Error(
+              "Não foi possível confirmar a validação."
+            ));
+            return;
+          }
+
+          const url = new URL(URL_APPS_SCRIPT);
+          url.searchParams.set("acao", "resultado");
+          url.searchParams.set("requisicao", id);
+          url.searchParams.set("t", Date.now());
+
+          const script = document.createElement("script");
+          let resposta = null;
+
+          window.receberResultadoQR = function(dados) {
+            resposta = dados;
+          };
+
+          script.src = url.toString();
+
+          script.onload = function() {
+            script.remove();
+
+            if (resposta && resposta.pendente !== true) {
+              resolve(resposta);
+            } else {
+              setTimeout(consultar, 1500);
+            }
+          };
+
+          script.onerror = function() {
+            script.remove();
+            setTimeout(consultar, 1500);
+          };
+
+          document.head.appendChild(script);
+        }
+
+        consultar();
+      });
+    }
+
+    async function enviarValidacao(codigo) {
+      const pin = campoPin.value.trim();
+
+      if (!/^\d{12}$/.test(pin)) {
+        mostrar(
+          "amarelo",
+          "PIN NECESSÁRIO",
+          "Informe os 12 dígitos do PIN."
+        );
+        botaoNovo.disabled = false;
+        return;
+      }
+
+      if (!URL_APPS_SCRIPT) {
+        mostrar(
+          "amarelo",
+          "INTEGRAÇÃO PENDENTE",
+          "O endereço do servidor ainda não foi configurado."
+        );
+        botaoNovo.disabled = false;
+        return;
+      }
+
+      mostrar(
+        "amarelo",
+        "AGUARDANDO VALIDAÇÃO",
+        "Consultando o Google Sheets..."
+      );
+
+      const requisicao = crypto.randomUUID();
+
+      try {
+        await fetch(URL_APPS_SCRIPT, {
+          method: "POST",
+          mode: "no-cors",
+          headers: {
+            "Content-Type": "text/plain;charset=UTF-8"
+          },
+          body: JSON.stringify({
+            requisicao: requisicao,
+            pin: pin,
+            codigo: codigo
+          })
+        });
+
+        const resposta =
+          await consultarResultado(requisicao);
+
+        concluir(resposta);
+
+      } catch (erro) {
+        mostrar(
+          "amarelo",
+          "CONFIRMAÇÃO INDISPONÍVEL",
+          "Verifique o registro na planilha antes de tentar novamente."
+        );
+
+        botaoNovo.disabled = false;
+      }
+    }
+
     async function iniciarCamera() {
+      prepararSom();
+
       botaoIniciar.disabled = true;
-      status.textContent = "Solicitando acesso à câmera...";
+
+      mostrar(
+        "",
+        "INICIANDO CÂMERA",
+        "Aguarde..."
+      );
 
       try {
         if (typeof Html5Qrcode === "undefined") {
-          throw new Error("Biblioteca de leitura não carregada.");
+          throw new Error("Biblioteca de leitura indisponível.");
         }
 
-        leitor = new Html5Qrcode("leitor");
+        if (!leitor) {
+          leitor = new Html5Qrcode("leitor");
+        }
 
         await leitor.start(
           { facingMode: "environment" },
@@ -129,53 +402,64 @@
                 Math.floor(Math.min(largura, altura) * 0.7)
               );
 
-              return { width: lado, height: lado };
+              return {
+                width: lado,
+                height: lado
+              };
             }
           },
           codigo => {
-            if (codigoReconhecido) return;
+            if (bloqueado) return;
 
-            codigoReconhecido = true;
+            bloqueado = true;
             leitor.pause(true);
+            botaoNovo.disabled = true;
 
-            status.textContent =
-              "QR Code reconhecido com sucesso!";
-
-            botaoNovo.disabled = false;
-
-            // A validação na planilha será integrada depois.
+            enviarValidacao(codigo);
           },
           () => {
-            // Aguarda silenciosamente o próximo quadro.
+            // Aguarda a identificação de um QR Code.
           }
         );
 
-        status.textContent =
-          "Câmera ativa. Aponte para o QR Code.";
+        mostrar(
+          "",
+          "CÂMERA ATIVA",
+          "Aponte para o ingresso."
+        );
 
       } catch (erro) {
-        status.textContent =
-          "Não foi possível iniciar a câmera: " +
-          erro.message;
-
+        mostrar(
+          "amarelo",
+          "ERRO NA CÂMERA",
+          erro.message
+        );
         botaoIniciar.disabled = false;
       }
     }
 
     function lerOutro() {
+      prepararSom();
+
       if (!leitor) return;
 
       try {
         leitor.resume();
-        codigoReconhecido = false;
+        bloqueado = false;
         botaoNovo.disabled = true;
 
-        status.textContent =
-          "Câmera ativa. Aponte para o próximo QR Code.";
+        mostrar(
+          "",
+          "CÂMERA ATIVA",
+          "Aponte para o próximo ingresso."
+        );
 
       } catch (erro) {
-        status.textContent =
-          "Não foi possível continuar: " + erro.message;
+        mostrar(
+          "amarelo",
+          "ERRO",
+          erro.message
+        );
       }
     }
   </script>
