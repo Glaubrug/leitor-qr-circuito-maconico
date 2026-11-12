@@ -295,13 +295,13 @@
             if (resposta && resposta.pendente !== true) {
               resolve(resposta);
             } else {
-              setTimeout(consultar, 1500);
+              setTimeout(consultar, 800);
             }
           };
 
           script.onerror = function() {
             script.remove();
-            setTimeout(consultar, 1500);
+            setTimeout(consultar, 800);
           };
 
           document.head.appendChild(script);
